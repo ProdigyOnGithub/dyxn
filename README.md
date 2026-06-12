@@ -1,0 +1,1 @@
+hi tejal pls look into wat i told u to do, write it in chunking/pipeline_new also we'll implement postgres after we have fully made the chunking pipeline and it works properly. After that it should be ready to run. Also make ur own branch with ur name and commit changes u make there then we'll merge into main
