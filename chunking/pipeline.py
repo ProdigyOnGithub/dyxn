@@ -33,6 +33,7 @@ parser = PDFParser()
 def build_chunks(input_dir, output_path, source_type):
     all_chunks=[]
     pdf_files = list(Path(input_dir).glob("*.pdf"))
+    print("found file")
 
     for pdf_path in pdf_files:
         print(f"Processing {pdf_path.name}")
@@ -82,6 +83,6 @@ def build_chunks(input_dir, output_path, source_type):
 
     print(f"Saved {len(all_chunks)} chunks")
 
-build_chunks(input_dir="raw_data/textbooks", output_path="data/textbook_chunks.json", source_type="textbook")
+build_chunks(input_dir="data/", output_path="data/textbook_chunks.json", source_type="textbook")
 
-build_chunks(input_dir="raw_data/notes", output_path="data/notes_chunks.json", source_type="notes")
+# build_chunks(input_dir="raw_data/notes", output_path="data/notes_chunks.json", source_type="notes")

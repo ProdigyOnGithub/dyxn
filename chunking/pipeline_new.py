@@ -49,6 +49,7 @@ def extract_toc(pdf_path):
     if doc:
         print("Doc found")
     toc = doc.get_toc()
+    print(doc)
 
     parsed = []
     

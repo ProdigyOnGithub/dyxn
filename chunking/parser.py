@@ -12,6 +12,7 @@ from rapidocr_onnxruntime import RapidOCR
 from sentence_transformers import SentenceTransformer
 
 nltk.download('punkt')
+nltk.download('punkt_tab')
 
 EMBED_MODEL = SentenceTransformer('all-MiniLM-L6-v2')
 OCR_ENGINE = RapidOCR()
