@@ -1,16 +1,16 @@
-from retrieval.vector_store import VectorStore
+from retrieval.qdrant_store import QdrantStore
 from retrieval.bm25_store import BM25Store
 
 
-vector_store = VectorStore()
+qdrant_store = QdrantStore()
 bm25_store = BM25Store()
 
-# Will write Retrieval using Postgres
+# TODO: Update BM25Store to pull from Qdrant/DB instead of local JSON files
 def retrieval_agent(state):
 
     query = state["syllabus_topic"]
 
-    dense_results = vector_store.search(query, top_k=5)
+    dense_results = qdrant_store.search(query, top_k=5)
     sparse_results = bm25_store.search(query, top_k=5)
 
     merged = dense_results + sparse_results
