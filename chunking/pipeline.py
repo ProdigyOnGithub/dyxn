@@ -30,7 +30,7 @@ HEADING_PATTERNS = [
 chunker = SemanticChunker(max_chunk_words=300, similarity_threshold=0.72)
 parser = PDFParser()
 
-def build_chunks(input_dir, output_path, source_type):
+def build_file_chunks(input_dir, output_path, source_type):
     all_chunks=[]
     pdf_files = list(Path(input_dir).glob("*.pdf"))
     print("found file")
@@ -83,6 +83,50 @@ def build_chunks(input_dir, output_path, source_type):
 
     print(f"Saved {len(all_chunks)} chunks")
 
-build_chunks(input_dir="data/", output_path="data/textbook_chunks.json", source_type="textbook")
-
+build_file_chunks(input_dir="data/", output_path="data/textbook_chunks.json", source_type="textbook")
 # build_chunks(input_dir="raw_data/notes", output_path="data/notes_chunks.json", source_type="notes")
+
+def build_chunks(input_dir, source_type):
+    all_chunks=[]
+    pdf_files = list(Path(input_dir).glob("*.pdf"))
+    print("found file")
+
+    for pdf_path in pdf_files:
+        print(f"Processing {pdf_path.name}")
+
+        pages = parser.parse_pdf(str(pdf_path))
+        current_heading = "Unknown"
+
+        for page_data in pages:
+            page_num = page_data["page"]
+            text = page_data["text"]
+            lines = text.split("\n")
+            
+            cleaned_lines = []
+
+            for line in lines:
+                stripped = line.strip()
+
+                if not stripped:
+                    continue
+
+                if chunker.is_heading(stripped):
+                    current_heading = stripped
+                
+                cleaned_lines.append(stripped)
+
+            merged_text = " ".join(cleaned_lines)
+            sentences = chunker.sentence_split(merged_text)
+            semantic_chunks = chunker.semantic_merge(sentences)
+
+            for idx, chunk in enumerate(semantic_chunks):
+                all_chunks.append({
+                    "source_type": source_type,
+                    "source_file": pdf_path.name,
+                    "page": page_num,
+                    "heading": current_heading,
+                    "chunk_id": f"{pdf_path.stem}_{page_num}_{idx}",
+                    "text": chunk
+                })
+
+    return all_chunks
