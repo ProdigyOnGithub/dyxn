@@ -13,7 +13,7 @@ client = QdrantClient(
 
 
 def create_textbook_collection():
-
+    
     existing = [c.name for c in client.get_collections().collections]
 
     if config.TEXTBOOK_COLLECTION_NAME in existing:
