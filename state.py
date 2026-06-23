@@ -3,6 +3,8 @@ from typing import TypedDict, List, Dict
 
 class GraphState(TypedDict):
     syllabus_topic: str
+    chat_history: List[Dict]
+    session_summary: str
     retrieved_chunks: List[str]
     retrieved_metadata: List[Dict]
     working_notes: str

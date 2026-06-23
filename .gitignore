@@ -3,3 +3,8 @@ data
 .env
 **/__pycache__
 storage
+*.db
+
+
+*.log
+*.patch

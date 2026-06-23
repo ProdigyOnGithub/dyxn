@@ -1,24 +1,42 @@
-from retrieval.vector_store import VectorStore
-from retrieval.bm25_store import BM25Store
+from retrieval.retriever import Retriever
+from db.qdrant import client
+from core.config import config
+from ingestion.embedding import embed_text
+import logging
+
+logger = logging.getLogger(__name__)
 
 
-vector_store = VectorStore()
-bm25_store = BM25Store()
+tb_retriever = None
+if config.TEXTBOOK_COLLECTION_NAME:
+    tb_retriever = Retriever(client, config.TEXTBOOK_COLLECTION_NAME, embed_text)
 
-# Will write Retrieval using Postgres
+sl_retriever = None
+if config.SLIDES_COLLECTION_NAME:
+    sl_retriever = Retriever(client, config.SLIDES_COLLECTION_NAME, embed_text)
+
 def retrieval_agent(state):
 
     query = state["syllabus_topic"]
-
-    dense_results = vector_store.search(query, top_k=5)
-    sparse_results = bm25_store.search(query, top_k=5)
-
-    merged = dense_results + sparse_results
+    
+    results = []
+    
+    if tb_retriever:
+        try:
+            results.extend(tb_retriever.retrieve(query, limit=10))
+        except Exception as e:
+            logger.error(f"Retrieval failed for collection={config.TEXTBOOK_COLLECTION_NAME} query='{query}'. Error: {e}")
+            
+    if sl_retriever:
+        try:
+            results.extend(sl_retriever.retrieve(query, limit=10))
+        except Exception as e:
+            logger.error(f"Retrieval failed for collection={config.SLIDES_COLLECTION_NAME} query='{query}'. Error: {e}")
 
     seen = set()
     unique = []
 
-    for doc in merged:
+    for doc in results:
 
         text = doc["text"]
 
