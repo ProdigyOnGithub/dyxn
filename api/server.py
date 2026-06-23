@@ -6,6 +6,8 @@ from jose import JWTError, jwt
 from typing import List
 import uuid
 
+from schemas import UserCreate, Token, ChatMessage
+
 from core.config import config
 from db.postgres import engine, get_db
 from db.models import Base, User
@@ -24,16 +26,7 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="DYXN AI Backend")
 
-class UserCreate(BaseModel):
-    username: str
-    password: str
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-class ChatMessage(BaseModel):
-    message: str
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
