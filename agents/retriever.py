@@ -1,13 +1,37 @@
-from retrieval.qdrant_store import QdrantStore
+from retrieval.retriever import Retriever
+from db.qdrant import client
+from core.config import config
+from ingestion.embedding import embed_text
+import logging
 
-qdrant_store = QdrantStore()
+logger = logging.getLogger(__name__)
+
+
+tb_retriever = None
+if config.TEXTBOOK_COLLECTION_NAME:
+    tb_retriever = Retriever(client, config.TEXTBOOK_COLLECTION_NAME, embed_text)
+
+sl_retriever = None
+if config.SLIDES_COLLECTION_NAME:
+    sl_retriever = Retriever(client, config.SLIDES_COLLECTION_NAME, embed_text)
 
 def retrieval_agent(state):
 
     query = state["syllabus_topic"]
-
-    # Increased top_k to 10 to compensate for the removal of BM25
-    results = qdrant_store.search(query, top_k=10)
+    
+    results = []
+    
+    if tb_retriever:
+        try:
+            results.extend(tb_retriever.retrieve(query, limit=10))
+        except Exception as e:
+            logger.error(f"Retrieval failed for collection={config.TEXTBOOK_COLLECTION_NAME} query='{query}'. Error: {e}")
+            
+    if sl_retriever:
+        try:
+            results.extend(sl_retriever.retrieve(query, limit=10))
+        except Exception as e:
+            logger.error(f"Retrieval failed for collection={config.SLIDES_COLLECTION_NAME} query='{query}'. Error: {e}")
 
     seen = set()
     unique = []

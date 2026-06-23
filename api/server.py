@@ -5,6 +5,9 @@ from pydantic import BaseModel
 from jose import JWTError, jwt
 from typing import List
 import uuid
+import logging
+
+logger = logging.getLogger(__name__)
 
 from schemas import UserCreate, Token, ChatMessage
 
@@ -57,10 +60,16 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     
     hashed_password = get_password_hash(user.password)
     new_user = User(username=user.username, hashed_password=hashed_password)
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    return {"message": "User created successfully"}
+    
+    try:
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        return {"message": "User created successfully"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Database error during registration: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error during registration")
 
 
 @app.post("/login", response_model=Token)
@@ -119,7 +128,8 @@ def chat(session_id: str, chat_message: ChatMessage, background_tasks: Backgroun
         if not ai_response:
              ai_response = "I encountered an error generating notes."
     except Exception as e:
-        ai_response = f"Graph execution error: {e}"
+        logger.error(f"Graph execution error in session {session_id}: {e}", exc_info=True)
+        ai_response = "I encountered an internal error generating notes. Please try again later."
         
   
     save_message(current_user.id, session_id, "ai", ai_response)
