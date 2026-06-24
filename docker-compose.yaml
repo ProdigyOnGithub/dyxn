@@ -55,7 +55,7 @@ services:
     build: .
 
     command: >
-      python -m app.queue.workers.chunk_worker
+      python -m queue.workers.chunk_worker
 
     volumes:
       - ./uploads:/uploads
@@ -71,7 +71,7 @@ services:
     build: .
 
     command: >
-      python -m app.queue.workers.embedding_worker
+      python -m queue.workers.embedding_worker
 
     volumes:
       - ./uploads:/uploads
