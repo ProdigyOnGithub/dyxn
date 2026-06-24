@@ -1,17 +1,24 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks, File, UploadFile
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from jose import JWTError, jwt
-from typing import List
+from typing import List, Optional
 import uuid
 import logging
+import os
+import shutil
+import json
+from pathlib import Path
+from urllib.parse import urlparse, unquote
+import urllib.request
 
 logger = logging.getLogger(__name__)
 
-from schemas import UserCreate, Token, ChatMessage
+from schemas import UserCreate, Token, ChatMessage, DocumentUploadRequest
 
 from core.config import config
+from core.redis import redis_client
 from db.postgres import engine, get_db
 from db.models import Base, User
 from api.auth import (
@@ -88,6 +95,65 @@ def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db
     reset_failed_attempts(request)
     access_token = create_access_token(data={"sub": user.username})
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@app.post("/documents/upload", status_code=status.HTTP_201_CREATED)
+async def upload_document(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
+    uploads_dir = Path("uploads")
+
+    uploads_dir.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    if not file.filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No filename provided")
+
+    document_id = uuid.uuid4().hex
+
+    safe_filename = (
+        file.filename
+        .replace("/", "_")
+        .replace("\\", "_")
+    )
+
+    destination_path = (
+        uploads_dir /
+        f"{document_id}_{safe_filename}"
+    )
+
+    try:
+
+        with open(destination_path, "wb") as out_file:
+            while chunk := await file.read(1024 * 1024):
+                out_file.write(chunk)
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save file: {e}"
+        )
+
+    redis_client.xadd(
+        "document_processing",
+        {
+            "data": json.dumps(
+                {
+                    "document_id": document_id,
+                    "owner_id": current_user.id,
+                    "filename": safe_filename,
+                    "path": str(destination_path)
+                }
+            )
+        }
+    )
+
+    return {
+        "document_id": document_id,
+        "filename": safe_filename,
+        "status": "queued"
+    }
 
 
 @app.post("/sessions", status_code=status.HTTP_201_CREATED)

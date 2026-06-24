@@ -8,7 +8,8 @@ from core.config import config
 
 
 client = QdrantClient(
-    path=config.QDRANT_PATH
+    host=config.QDRANT_PATH,
+    port=config.QDRANT_PORT
 )
 
 

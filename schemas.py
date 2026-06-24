@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Optional
 
 class EvalInput(BaseModel):
     model_name: str
@@ -19,3 +20,7 @@ class Token(BaseModel):
 
 class ChatMessage(BaseModel):
     message: str
+
+class DocumentUploadRequest(BaseModel):
+    url: str
+    filename: Optional[str] = None
