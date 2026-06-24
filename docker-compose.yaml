@@ -50,12 +50,28 @@ services:
       - qdrant
       - postgres
 
-  worker:
+  chunk_worker:
 
     build: .
 
     command: >
-      python -m queue.workers.chunk_worker
+      python -m app.queue.workers.chunk_worker
+
+    volumes:
+      - ./uploads:/uploads
+      - ./outputs:/outputs
+
+    depends_on:
+      - redis
+      - qdrant
+      - postgres
+
+  embed_worker:
+
+    build: .
+
+    command: >
+      python -m app.queue.workers.embedding_worker
 
     volumes:
       - ./uploads:/uploads
