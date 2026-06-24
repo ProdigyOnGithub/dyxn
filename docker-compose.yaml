@@ -1,0 +1,71 @@
+version: "3.9"
+
+services:
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  qdrant:
+    image: qdrant/qdrant
+    ports:
+      - "6333:6333"
+
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  postgres:
+    image: postgres:17
+
+    environment:
+      POSTGRES_DB: dynx_latex
+      POSTGRES_USER: dyxn_user
+      POSTGRES_PASSWORD: dyxn_password
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+
+    build: .
+
+    command: >
+      uvicorn api.server:app
+      --host 0.0.0.0
+      --port 8000
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - ./uploads:/uploads
+      - ./outputs:/outputs
+
+    depends_on:
+      - redis
+      - qdrant
+      - postgres
+
+  worker:
+
+    build: .
+
+    command: >
+      python -m queue.workers.chunk_worker
+
+    volumes:
+      - ./uploads:/uploads
+      - ./outputs:/outputs
+
+    depends_on:
+      - redis
+      - qdrant
+      - postgres
+
+volumes:
+  postgres_data:
+  qdrant_data:
