@@ -1,142 +1,136 @@
-from db.qdrant import client
-from qdrant_client.models import PointStruct, Filter, FieldCondition, MatchValue, VectorParams, Distance
-from core.config import config
-from ingestion.embedding import embed_text
-from langchain.chat_models import init_chat_model
-import uuid
+import logging
 import time
+import uuid
 
-# Ensure memory collection exists
-try:
-    client.get_collection(config.MEMORY_COLLECTION_NAME)
-except Exception:
-    client.create_collection(
-        collection_name=config.MEMORY_COLLECTION_NAME,
-        vectors_config=VectorParams(size=config.VECTOR_SIZE, distance=Distance.COSINE)
-    )
+from qdrant_client.models import FieldCondition, Filter, MatchValue, PointStruct
 
-llm = init_chat_model(
-    model="gpt-4o-mini",
-    model_provider="openai"
-)
+from core.config import config
+from core.llm import get_llm
+from db.qdrant import client, ensure_collection
+from ingestion.embedding import embed_text
+
+
+logger = logging.getLogger(__name__)
+llm = None
+
+
+def initialize_memory_store():
+    ensure_collection(config.MEMORY_COLLECTION_NAME)
+
+
+def get_memory_llm():
+    global llm
+    if llm is None:
+        llm = get_llm()
+    return llm
+
 
 def save_message(user_id: int, session_id: str, role: str, message: str):
-    """Saves a single message into Qdrant with a zero vector (no embedding needed for sequential chat)."""
-    zero_vec = [0.0] * config.VECTOR_SIZE
+    initialize_memory_store()
     point = PointStruct(
         id=str(uuid.uuid4()),
-        vector=zero_vec,
+        vector=[0.0] * config.VECTOR_SIZE,
         payload={
             "user_id": user_id,
             "session_id": session_id,
             "role": role,
             "message": message,
             "timestamp": time.time(),
-            "is_summarized": False
-        }
+            "is_summarized": False,
+        },
     )
     client.upsert(collection_name=config.MEMORY_COLLECTION_NAME, points=[point])
 
 
-def get_context_for_inference(user_id: int, session_id: str, window_size: int = 5):
-    """
-    Fetches the session summary (long-term memory) and last N messages (short-term memory).
-    """
-    
-    summary = ""
+def _session_filter(user_id: int, session_id: str, *extra_conditions):
+    return Filter(
+        must=[
+            FieldCondition(key="session_id", match=MatchValue(value=session_id)),
+            FieldCondition(key="user_id", match=MatchValue(value=user_id)),
+            *extra_conditions,
+        ]
+    )
+
+
+def _system_summary_filter(user_id: int, session_id: str):
+    return _session_filter(
+        user_id,
+        session_id,
+        FieldCondition(key="role", match=MatchValue(value="system_summary")),
+    )
+
+
+def _unsummarized_filter(user_id: int, session_id: str):
+    return Filter(
+        must=[
+            FieldCondition(key="session_id", match=MatchValue(value=session_id)),
+            FieldCondition(key="user_id", match=MatchValue(value=user_id)),
+            FieldCondition(key="is_summarized", match=MatchValue(value=False)),
+        ],
+        must_not=[
+            FieldCondition(key="role", match=MatchValue(value="system_summary")),
+        ],
+    )
+
+
+def _load_summary(user_id: int, session_id: str):
     summary_records, _ = client.scroll(
         collection_name=config.MEMORY_COLLECTION_NAME,
-        scroll_filter=Filter(
-            must=[
-                FieldCondition(key="session_id", match=MatchValue(value=session_id)),
-                FieldCondition(key="user_id", match=MatchValue(value=user_id)),
-                FieldCondition(key="role", match=MatchValue(value="system_summary"))
-            ]
-        ),
-        limit=1
+        scroll_filter=_system_summary_filter(user_id, session_id),
+        limit=1,
     )
-    if summary_records:
-        summary = summary_records[0].payload.get("message", "")
-    
-    
+    if not summary_records:
+        return "", []
+
+    return summary_records[0].payload.get("message", ""), summary_records
+
+
+def get_context_for_inference(user_id: int, session_id: str, window_size: int = 5):
+    initialize_memory_store()
+
+    summary, _ = _load_summary(user_id, session_id)
     records, _ = client.scroll(
         collection_name=config.MEMORY_COLLECTION_NAME,
-        scroll_filter=Filter(
-            must=[
-                FieldCondition(key="session_id", match=MatchValue(value=session_id)),
-                FieldCondition(key="user_id", match=MatchValue(value=user_id)),
-                FieldCondition(key="is_summarized", match=MatchValue(value=False))
-            ],
-            must_not=[
-                FieldCondition(key="role", match=MatchValue(value="system_summary"))
-            ]
-        ),
-        limit=20  
+        scroll_filter=_unsummarized_filter(user_id, session_id),
+        limit=20,
     )
-    
-    sorted_records = sorted(records, key=lambda x: x.payload.get("timestamp", 0))
-    recent = sorted_records[-window_size:]
-    
-    messages = [{"role": r.payload["role"], "content": r.payload["message"]} for r in recent]
-    
+
+    sorted_records = sorted(records, key=lambda record: record.payload.get("timestamp", 0))
+    recent_records = sorted_records[-window_size:]
+    messages = [
+        {"role": record.payload["role"], "content": record.payload["message"]}
+        for record in recent_records
+    ]
+
     return {
         "summary": summary,
-        "recent_messages": messages
+        "recent_messages": messages,
     }
 
 
 def summarize_old_messages(user_id: int, session_id: str, window_size: int = 5):
-    """
-    Background task: Summarizes older messages into a compressed summary stored in Qdrant.
-    Only processes unsummarized messages outside the sliding window.
-    """
-    
+    initialize_memory_store()
+
     records, _ = client.scroll(
         collection_name=config.MEMORY_COLLECTION_NAME,
-        scroll_filter=Filter(
-            must=[
-                FieldCondition(key="session_id", match=MatchValue(value=session_id)),
-                FieldCondition(key="user_id", match=MatchValue(value=user_id)),
-                FieldCondition(key="is_summarized", match=MatchValue(value=False))
-            ],
-            must_not=[
-                FieldCondition(key="role", match=MatchValue(value="system_summary"))
-            ]
-        ),
-        limit=50 
+        scroll_filter=_unsummarized_filter(user_id, session_id),
+        limit=50,
     )
-    
-    sorted_records = sorted(records, key=lambda x: x.payload.get("timestamp", 0))
-    
-    if len(sorted_records) <= window_size:
-        
-        return
-    
-    
-    to_summarize = sorted_records[:-window_size]
-    
-    if not to_summarize:
-        return
-    
+    sorted_records = sorted(records, key=lambda record: record.payload.get("timestamp", 0))
 
-    existing_summary = ""
-    summary_records, _ = client.scroll(
-        collection_name=config.MEMORY_COLLECTION_NAME,
-        scroll_filter=Filter(
-            must=[
-                FieldCondition(key="session_id", match=MatchValue(value=session_id)),
-                FieldCondition(key="user_id", match=MatchValue(value=user_id)),
-                FieldCondition(key="role", match=MatchValue(value="system_summary"))
-            ]
-        ),
-        limit=1
+    if len(sorted_records) <= window_size:
+        return
+
+    records_to_summarize = sorted_records[:-window_size]
+    if not records_to_summarize:
+        return
+
+    existing_summary, summary_records = _load_summary(user_id, session_id)
+    messages_text = "\n".join(
+        f'{record.payload["role"]}: {record.payload["message"]}'
+        for record in records_to_summarize
     )
-    if summary_records:
-        existing_summary = summary_records[0].payload.get("message", "")
-    
-    
-    messages_text = "\n".join([f'{r.payload["role"]}: {r.payload["message"]}' for r in to_summarize])
-    
+
     prompt = f"""You are summarizing a conversation for long-term memory.
 Below is the previous summary (if any), followed by new messages.
 Combine them into a single concise paragraph capturing key facts, topics discussed, and user intent.
@@ -148,44 +142,44 @@ NEW MESSAGES:
 {messages_text}
 
 NEW COMPREHENSIVE SUMMARY:"""
-    
+
     try:
-        response = llm.invoke(prompt)
+        response = get_memory_llm().invoke(prompt)
         new_summary = response.content.strip()
-        
-        
+
         if summary_records:
             client.delete(
                 collection_name=config.MEMORY_COLLECTION_NAME,
-                points_selector=[summary_records[0].id]
+                points_selector=[summary_records[0].id],
             )
-        
-        summary_vec = embed_text(new_summary)
+
         summary_point = PointStruct(
             id=str(uuid.uuid4()),
-            vector=summary_vec,
+            vector=embed_text(new_summary),
             payload={
                 "user_id": user_id,
                 "session_id": session_id,
                 "role": "system_summary",
                 "message": new_summary,
                 "timestamp": time.time(),
-                "is_summarized": False
-            }
+                "is_summarized": False,
+            },
         )
         client.upsert(collection_name=config.MEMORY_COLLECTION_NAME, points=[summary_point])
-        
-       
-        for record in to_summarize:
+
+        for record in records_to_summarize:
             updated_payload = record.payload.copy()
             updated_payload["is_summarized"] = True
             client.set_payload(
                 collection_name=config.MEMORY_COLLECTION_NAME,
                 payload=updated_payload,
-                points=[record.id]
+                points=[record.id],
             )
-        
-        print(f"Session {session_id} memory summarized. {len(to_summarize)} messages compressed.")
-        
-    except Exception as e:
-        print(f"Summarization error for session {session_id}: {e}")
+
+        logger.info(
+            "Session memory summarized session_id=%s messages=%s",
+            session_id,
+            len(records_to_summarize),
+        )
+    except Exception:
+        logger.exception("Summarization failed session_id=%s", session_id)

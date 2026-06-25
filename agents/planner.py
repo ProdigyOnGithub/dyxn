@@ -1,10 +1,14 @@
-from langchain.chat_models import init_chat_model
+from core.llm import get_llm
 
 
-llm = init_chat_model(
-    model="gpt-4.1-mini",
-    model_provider="openai"
-)
+llm = None
+
+
+def _get_planner_llm():
+    global llm
+    if llm is None:
+        llm = get_llm()
+    return llm
 
 
 def planner_agent(state):
@@ -36,7 +40,7 @@ If there is prior conversation context, use it to avoid repeating what was alrea
 Return a concise structured outline.
 """
 
-    response = llm.invoke(prompt)
+    response = _get_planner_llm().invoke(prompt)
 
     state["working_notes"] = response.content
 

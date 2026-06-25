@@ -1,14 +1,13 @@
-from langgraph.graph import StateGraph, END
-from state import GraphState
+from langgraph.graph import END, StateGraph
 
+from agents.evaluator import evaluation_agent
+from agents.latex_agent import latex_agent
 from agents.planner import planner_agent
 from agents.retriever import retrieval_agent
 from agents.synthesizer import synthesis_agent
-from agents.latex_agent import latex_agent
-from agents.evaluator import evaluation_agent
+from state import GraphState
 
 MAX_ITER = 3
-current_iter = 0
 
 builder = StateGraph(GraphState)
 
@@ -26,12 +25,14 @@ builder.add_edge("retriever", "synthesizer")
 builder.add_edge("synthesizer", "latex")
 builder.add_edge("latex", "evaluator")
 
+
 def evaluation_router(state):
     score = state["evaluation_score"]
+    iterations = state.get("evaluation_iterations", 0)
 
-    if score >= 8.0 or current_iter >= MAX_ITER:
+    if score >= 8.0 or iterations >= MAX_ITER:
         return END
-    current_iter += 1
+
     return "synthesizer"
 
 
@@ -40,8 +41,8 @@ builder.add_conditional_edges(
     evaluation_router,
     {
         END: END,
-        "synthesizer": "synthesizer"
-    }
+        "synthesizer": "synthesizer",
+    },
 )
 
 

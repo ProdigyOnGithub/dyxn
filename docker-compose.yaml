@@ -1,86 +1,106 @@
-version: "3.9"
-
 services:
-
   redis:
     image: redis:7
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   qdrant:
     image: qdrant/qdrant
     ports:
       - "6333:6333"
-
     volumes:
       - qdrant_data:/qdrant/storage
 
   postgres:
     image: postgres:17
-
     environment:
       POSTGRES_DB: dynx_latex
       POSTGRES_USER: dyxn_user
       POSTGRES_PASSWORD: dyxn_password
-
     ports:
       - "5432:5432"
-
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dyxn_user -d dynx_latex"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
   api:
-
     build: .
-
+    env_file:
+      - .env
+    environment:
+      POSTGRES_URI: postgresql://dyxn_user:dyxn_password@postgres:5432/dynx_latex
+      QDRANT_PATH: qdrant
+      REDIS_HOST: redis
+      UPLOADS_DIR: /uploads
     command: >
       uvicorn api.server:app
       --host 0.0.0.0
       --port 8000
-
     ports:
       - "8000:8000"
-
     volumes:
       - ./uploads:/uploads
       - ./outputs:/outputs
-
     depends_on:
-      - redis
-      - qdrant
-      - postgres
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      postgres:
+        condition: service_healthy
 
   chunk_worker:
-
     build: .
-
+    env_file:
+      - .env
+    environment:
+      POSTGRES_URI: postgresql://dyxn_user:dyxn_password@postgres:5432/dynx_latex
+      QDRANT_PATH: qdrant
+      REDIS_HOST: redis
+      UPLOADS_DIR: /uploads
     command: >
-      python -m queue.workers.chunk_worker
-
+      python -m task_queue.workers.chunk_worker
     volumes:
       - ./uploads:/uploads
       - ./outputs:/outputs
-
     depends_on:
-      - redis
-      - qdrant
-      - postgres
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      postgres:
+        condition: service_healthy
 
   embed_worker:
-
     build: .
-
+    env_file:
+      - .env
+    environment:
+      POSTGRES_URI: postgresql://dyxn_user:dyxn_password@postgres:5432/dynx_latex
+      QDRANT_PATH: qdrant
+      REDIS_HOST: redis
+      UPLOADS_DIR: /uploads
     command: >
-      python -m queue.workers.embedding_worker
-
+      python -m task_queue.workers.embedding_worker
     volumes:
       - ./uploads:/uploads
       - ./outputs:/outputs
-
     depends_on:
-      - redis
-      - qdrant
-      - postgres
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres_data:

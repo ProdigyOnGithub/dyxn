@@ -1,5 +1,6 @@
 .git
 .gitignore
+.env
 __pycache__
 *.pyc
 *.pyo
@@ -9,3 +10,9 @@ venv
 env
 .idea
 .vscode
+storage
+uploads
+outputs
+data
+*.db
+*.log
