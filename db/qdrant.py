@@ -8,7 +8,8 @@ from core.config import config
 
 
 client = QdrantClient(
-    host=config.QDRANT_PATH,
+    # path=config.QDRANT_PATH,
+    host=config.QDRANT_HOST,
     port=config.QDRANT_PORT
 )
 
@@ -48,3 +49,6 @@ def create_slides_collection():
     )
 
     print("Slides Collection created")
+
+create_textbook_collection()
+create_slides_collection()

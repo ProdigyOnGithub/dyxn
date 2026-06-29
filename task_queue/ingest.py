@@ -1,9 +1,7 @@
 import uuid
-from queue.producer import enqueue_document
+from task_queue.producer import enqueue_document
 
-def upload_document(path, owner_id, source_type):
-
-    document_id = uuid.uuid4().hex
+def upload_doc(document_id, path, owner_id, source_type):
 
     enqueue_document(
         document_id=document_id,

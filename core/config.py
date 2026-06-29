@@ -15,7 +15,8 @@ class Config(BaseSettings):
     POSTGRES_URI: str = "sqlite:///./dummy.db" 
 
     # Qdrant
-    QDRANT_PATH: str = "qdrant"
+    QDRANT_PATH: str = "./storage/qdrant"
+    QDRANT_HOST: str = "qdrant"
     QDRANT_PORT: int = 6333
 
     # Redis

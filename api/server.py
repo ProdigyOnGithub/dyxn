@@ -30,6 +30,7 @@ from api.auth import (
     reset_failed_attempts
 )
 from api.memory import get_context_for_inference, save_message, summarize_old_messages
+from task_queue.ingest import upload_doc
 
 
 Base.metadata.create_all(bind=engine)
@@ -148,9 +149,11 @@ async def upload_document(file: UploadFile = File(...), current_user: User = Dep
             )
         }
     )
+    print(destination_path)
+    id = upload_doc(document_id=document_id, path=str(destination_path), owner_id=current_user.id, source_type="textbook")
 
     return {
-        "document_id": document_id,
+        "document_id": id,
         "filename": safe_filename,
         "status": "queued"
     }

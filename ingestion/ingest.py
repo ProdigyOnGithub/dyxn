@@ -96,7 +96,7 @@ def upsert_chunk(chunk_id: str, embedding: List[float], payload: Dict):
     
     client.upsert(
         collection_name=collection_name,
-        points=point
+        points=[point]
     )
 
 

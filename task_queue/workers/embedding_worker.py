@@ -23,19 +23,22 @@ while True:
         CONSUMER,
         {"embedding_queue": ">"},
         count=1,
-        block=5000
+        block=0
     )
 
     if not messages:
         continue
 
     _, entries = messages[0]
+    print("chunks received")
 
     for msg_id, data in entries:
-
+        
         payload = json.loads(data["data"])
         vector = embed_text([payload["text"]])[0]
         chunk_id = (f"{payload['document_id']}_{payload['chunk_index']}")
+        print(vector)
+        print("chunk embedded")
 
         upsert_chunk(
             chunk_id=chunk_id,
@@ -48,6 +51,7 @@ while True:
                 "text": payload["text"]
             }
         )
+        print("embedding sent to qdrant")
 
         redis_client.xack(
             "embedding_queue",

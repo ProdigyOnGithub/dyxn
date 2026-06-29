@@ -23,7 +23,7 @@ while True:
         CONSUMER,
         {"document_ingestion": ">"},
         count=1,
-        block=5000
+        block=0
     )
 
     if not messages:
@@ -35,10 +35,12 @@ while True:
 
         payload = json.loads(data["data"])
         chunks = build_chunks(payload["path"], payload["source_type"])
+        print(chunks)
+        print("chunks built")
 
         for i, chunk in enumerate(chunks):
-
-            redis_client.xadd(
+            print(i, chunk)
+            msg_id = redis_client.xadd(
                 "embedding_queue",
                 {
                     "data": json.dumps({
@@ -46,10 +48,12 @@ while True:
                         "owner_id": payload["owner_id"],
                         "chunk_index": i,
                         "source_type": payload["source_type"], 
-                        "text": chunk
+                        "text": chunk["text"]
                     })
                 }
             )
+            print("Chunk sent:", msg_id)
+        print("chunks sent")
 
         redis_client.xack(
             "document_ingestion",
