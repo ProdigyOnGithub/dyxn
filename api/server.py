@@ -31,6 +31,7 @@ from api.auth import (
 )
 from api.memory import get_context_for_inference, save_message, summarize_old_messages
 from task_queue.ingest import upload_doc
+from agents.chatbot import chatbot_agent
 
 
 Base.metadata.create_all(bind=engine)
@@ -165,45 +166,27 @@ def create_session(current_user: User = Depends(get_current_user)):
     session_id = str(uuid.uuid4())
     return {"id": session_id, "title": "New Chat"}
 
-
 @app.post("/sessions/{session_id}/chat")
-def chat(session_id: str, chat_message: ChatMessage, background_tasks: BackgroundTasks, current_user: User = Depends(get_current_user)):
-    """
-    Sends a message to a specific session.
-    Invokes the original LangGraph pipeline with the context from Qdrant.
-    """
+def chat(session_id:str, chat_message:ChatMessage,background_tasks:BackgroundTasks, current_user: User=Depends(get_current_user)):
 
-    save_message(current_user.id, session_id, "user", chat_message.message)
-    
-    
-    context = get_context_for_inference(current_user.id, session_id, window_size=5)
-    
+    save_message(current_user.id, session_id,"user",chat_message.message)
+    context = get_context_for_inference(current_user.id,session_id,window_size=5)
+
     try:
-        from graph import graph
-        initial_state = {
-            "syllabus_topic": chat_message.message,
-            "chat_history": context["recent_messages"],
-            "session_summary": context["summary"],
-            "retrieved_chunks": [],
-            "retrieved_metadata": [],
-            "working_notes": "",
-            "synthesized_section": "",
-            "latex_output": "",
-            "evaluation_score": 0.0,
-            "evaluation_feedback": []
-        }
-        result = graph.invoke(initial_state)
-        ai_response = result.get("latex_output", "")
-        if not ai_response:
-             ai_response = "I encountered an error generating notes."
-    except Exception as e:
-        logger.error(f"Graph execution error in session {session_id}: {e}", exc_info=True)
-        ai_response = "I encountered an internal error generating notes. Please try again later."
-        
-  
-    save_message(current_user.id, session_id, "ai", ai_response)
-    
-    
-    background_tasks.add_task(summarize_old_messages, current_user.id, session_id, 5)
-    
-    return {"response": ai_response}
+        result = chatbot_agent(
+            user_message=chat_message.message,
+            chat_history=context["recent_messages"],
+            session_summary=context["summary"]
+        )
+        llm_response = result["answer"]
+        sources = result.get("sources",[])
+    except Exception as E:
+        logger.error(f"error in session {session_id}:{E} from chatbot",exc_info=True)
+        llm_response = "error while processing question"
+        sources = []
+    save_message(current_user.id, session_id,"ai",llm_response)
+    background_tasks.add_task(summarize_old_messages,current_user.id,session_id,5)
+    return {"response": llm_response,"sources" :sources}
+
+
+
