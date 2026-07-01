@@ -1,8 +1,10 @@
 venv
 data
 .env
+.dockerignore
 **/__pycache__
 storage
+uploads
 *.db
 
 

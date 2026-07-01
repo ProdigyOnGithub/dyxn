@@ -9,11 +9,19 @@ class Config(BaseSettings):
     SLIDES_COLLECTION_NAME: str = ""
     MEMORY_COLLECTION_NAME: str = "chat_memory"
     VECTOR_SIZE: int = 768
-    QDRANT_PATH: str = ""
     EMBEDDING_MODEL: str = ""
     
     # Postgres
     POSTGRES_URI: str = "sqlite:///./dummy.db" 
+
+    # Qdrant
+    QDRANT_PATH: str = "./storage/qdrant"
+    QDRANT_HOST: str = "qdrant"
+    QDRANT_PORT: int = 6333
+
+    # Redis
+    REDIS_HOST: str = "redis"
+    REDIS_PORT: int = 6379
     
     # JWT Auth
     SECRET_KEY: str = "super_secret_key_change_in_production"
