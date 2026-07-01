@@ -2,7 +2,7 @@ from db.qdrant import client
 from qdrant_client.models import PointStruct, Filter, FieldCondition, MatchValue, VectorParams, Distance
 from core.config import config
 from ingestion.embedding import embed_text
-from langchain.chat_models import init_chat_model
+from core.llm import get_llm
 import uuid
 import time
 
@@ -15,10 +15,7 @@ except Exception:
         vectors_config=VectorParams(size=config.VECTOR_SIZE, distance=Distance.COSINE)
     )
 
-llm = init_chat_model(
-    model="gpt-4o-mini",
-    model_provider="openai"
-)
+llm = get_llm()
 
 def save_message(user_id: int, session_id: str, role: str, message: str):
     """Saves a single message into Qdrant with a zero vector (no embedding needed for sequential chat)."""
