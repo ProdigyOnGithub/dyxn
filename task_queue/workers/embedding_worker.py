@@ -44,11 +44,14 @@ while True:
             chunk_id=chunk_id,
             embedding=vector,
             payload={
-                "owner_id": payload["owner_id"],
-                "document_id": payload["document_id"],
-                "chunk_index": payload["chunk_index"],
-                "source_type": payload["source_type"],
-                "text": payload["text"]
+                "owner_id":payload["owner_id"],
+                "document_id":payload["document_id"],
+                "chunk_index":payload["chunk_index"],
+                "source_type":payload["source_type"],
+                "text":payload["text"],
+                "source_file":payload.get("source_file",""),
+                "page":payload.get("page"),
+                "heading":payload.get("heading","")
             }
         )
         print("embedding sent to qdrant")

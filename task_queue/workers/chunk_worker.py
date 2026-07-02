@@ -38,20 +38,23 @@ while True:
         print(chunks)
         print("chunks built")
 
-        for i, chunk in enumerate(chunks):
-            print(i, chunk)
+        for i,chunk in enumerate(chunks):
+            print(i,chunk)
             msg_id = redis_client.xadd(
                 "embedding_queue",
                 {
-                    "data": json.dumps({
-                        "document_id": payload["document_id"],
-                        "owner_id": payload["owner_id"],
-                        "chunk_index": i,
-                        "source_type": payload["source_type"], 
-                        "text": chunk["text"]
+                    "data":json.dumps({
+                        "document_id":payload["document_id"],
+                        "owner_id":payload["owner_id"],
+                        "chunk_index":i,
+                        "source_type":payload["source_type"],
+                        "text":chunk["text"],
+                        "source_file":chunk.get("source_file",""),
+                        "page":chunk.get("page"),
+                        "heading":chunk.get("heading","")
                     })
                 }
-            )
+            )        
             print("Chunk sent:", msg_id)
         print("chunks sent")
 
