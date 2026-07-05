@@ -3,7 +3,7 @@ from db.qdrant import client
 from core.config import config
 from core.llm import get_llm
 from ingestion.embedding import embed_text
-from langchain.schema import SystemMessage, HumanMessage, AIMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 import logging
 
 logger = logging.getLogger(__name__)
