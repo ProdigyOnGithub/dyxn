@@ -40,7 +40,7 @@ while True:
 
         for i,chunk in enumerate(chunks):
             print(i,chunk)
-            msg_id = redis_client.xadd(
+            embed_id = redis_client.xadd(
                 "embedding_queue",
                 {
                     "data":json.dumps({
@@ -55,7 +55,7 @@ while True:
                     })
                 }
             )        
-            print("Chunk sent:", msg_id)
+            print("Chunk sent:", embed_id)
         print("chunks sent")
 
         redis_client.xack(
