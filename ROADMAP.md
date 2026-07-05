@@ -10,6 +10,12 @@
 
 - [ ] **QoL Changes**: Pretty shitty inefficient code right now, need to make it clean with core.llm and additional changes for proper llm calling, imports, etc
 
+- [ ] **Frontend**: Have a simple frontend supporting all functionality
+
+- [ ] **Session Storage**: Sessions are only being made but they arent being stored as we need to store session id in metadata
+
+- [ ] **File Deletion**: Currently the file stays in the system after being processed, need to implement a system which deletes the file after its fully done processing
+
 - [ ] **Final Bug Fixing**: Ensure everything works smoothly and by everything I mean **EVERYTHING** on your local device
 
-- **Dockerise**: Little bit of tweaking of docker-compose and Dockerfile if needed to wind up
+- [ ] **Dockerise**: Little bit of tweaking of docker-compose and Dockerfile if needed to wind up
