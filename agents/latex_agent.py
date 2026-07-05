@@ -1,10 +1,7 @@
-from langchain.chat_models import init_chat_model
+from core.llm import get_llm
 
 
-llm = init_chat_model(
-    model="gpt-4.1-mini",
-    model_provider="openai"
-)
+llm = get_llm()
 
 
 LATEX_TEMPLATE = r"""

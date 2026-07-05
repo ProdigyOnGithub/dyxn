@@ -27,8 +27,11 @@ def ingest_tb_chunks(json_file):
                 id=uuid.uuid4(),
                 vector=vector,
                 payload={
-                    "text":
-                    chunk["text"]
+                    "text":chunk["text"],
+                    "source_file":chunk.get("source_file",""),
+                    "page":chunk.get("page"),
+                    "heading":chunk.get("heading",""),
+                    "source_type":chunk.get("source_type","textbook")
                 }
             )
         )
@@ -60,8 +63,11 @@ def ingest_slides_chunks(json_file):
                 id=str(uuid.uuid4()),
                 vector=vector,
                 payload={
-                    "text":
-                    chunk["text"]
+                    "text":chunk["text"],
+                    "source_file":chunk.get("source_file",""),
+                    "page":chunk.get("page"),
+                    "heading":chunk.get("heading",""),
+                    "source_type":chunk.get("source_type","slides")
                 }
             )
         )
@@ -83,7 +89,10 @@ def upsert_chunk(chunk_id: str, embedding: List[float], payload: Dict):
                     "owner_id": payload["owner_id"],
                     "document_id": payload["document_id"],
                     "chunk_index": payload["chunk_index"],
-                    "text": payload["text"]
+                    "text": payload["text"],
+                    "source_file":payload.get("source_file",""),
+                    "page":payload.get("page"),
+                    "heading":payload.get("heading","")
                 }
             )
     collection_name = ""

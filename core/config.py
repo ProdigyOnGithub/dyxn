@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings
 load_dotenv()
 
 class Config(BaseSettings):
-    OPENAI_API_KEY: str = ""
+    GROQ_API_KEY: str = ""
     TEXTBOOK_COLLECTION_NAME: str = ""
     SLIDES_COLLECTION_NAME: str = ""
     MEMORY_COLLECTION_NAME: str = "chat_memory"
