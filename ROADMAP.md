@@ -12,7 +12,7 @@
 
 - [x] **Frontend**: Have a simple frontend supporting all functionality
 
-- [ ] **File Deletion**: Currently the file stays in the system after being processed, need to implement a system which deletes the file after its fully done processing
+- [x] **File Deletion**: Currently the file stays in the system after being processed, need to implement a system which deletes the file after its fully done processing
 
 - [ ] **Final Bug Fixing**: Ensure everything works smoothly and by everything I mean **EVERYTHING** on your local device
 
