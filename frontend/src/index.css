@@ -703,13 +703,27 @@ input, textarea {
   font-weight: 700;
 }
 
+.message-content-wrapper {
+  max-width: 75%;
+  display: flex;
+  flex-direction: column;
+}
+
+.message-row.user .message-content-wrapper {
+  align-items: flex-end;
+}
+
+.message-row.ai .message-content-wrapper {
+  align-items: flex-start;
+}
+
 .message-bubble {
-  max-width: 70%;
   padding: 12px 16px;
   border-radius: var(--radius-lg);
   font-size: 0.9rem;
   line-height: 1.6;
   word-break: break-word;
+  width: fit-content;
 }
 
 .message-bubble.user-bubble {
@@ -1038,7 +1052,283 @@ input, textarea {
     transform: translateX(0);
   }
 
-  .message-bubble {
+  .message-content-wrapper {
     max-width: 85%;
   }
 }
+
+/* --- Floating Modal Overlay --- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal);
+  animation: fadeIn 0.3s ease;
+  padding: var(--space-md);
+}
+
+.modal-content {
+  background: var(--bg-glass);
+  backdrop-filter: blur(24px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
+  width: 100%;
+  max-width: 480px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  position: relative;
+}
+
+.upload-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-lg) var(--space-lg) var(--space-sm);
+}
+
+.upload-title {
+  font-weight: 700;
+  font-size: 1.1rem;
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.btn-close-modal {
+  color: var(--text-secondary);
+  background: transparent;
+  font-size: 1rem;
+  padding: 6px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.btn-close-modal:hover {
+  color: var(--text-primary);
+  background: var(--border-color);
+  border-color: var(--border-hover);
+}
+
+/* --- Header Upload Action --- */
+.btn-upload-trigger {
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  background: rgba(124, 58, 237, 0.12);
+  border: 1px solid rgba(124, 58, 237, 0.3);
+  color: var(--accent-primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.btn-upload-trigger:hover {
+  background: var(--accent-gradient);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: var(--shadow-glow);
+  transform: translateY(-1px);
+}
+
+.btn-upload-trigger:active {
+  transform: translateY(0);
+}
+
+/* --- Sidebar Delete Session --- */
+.session-item {
+  position: relative;
+  transition: padding var(--transition-fast), background var(--transition-fast);
+}
+
+.btn-delete-session {
+  opacity: 0;
+  pointer-events: none;
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: 0.85rem;
+  padding: var(--space-xs);
+  margin-left: auto;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.session-item:hover .btn-delete-session {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.btn-delete-session:hover {
+  color: var(--error);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+/* --- Chat Dashboard Greeting --- */
+.chat-dashboard-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-primary);
+  padding: var(--space-xl);
+}
+
+.chat-dashboard-card {
+  max-width: 480px;
+  text-align: center;
+  padding: var(--space-2xl);
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.dashboard-logo-icon {
+  font-size: 3.5rem;
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: bounce 2s infinite ease-in-out;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.btn-dashboard-start {
+  margin-top: var(--space-md);
+  padding: 12px 24px;
+  border-radius: var(--radius-md);
+  background: var(--accent-gradient);
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 0.92rem;
+  box-shadow: var(--shadow-md);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.btn-dashboard-start:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-glow);
+}
+
+/* --- Starter Prompts Grid --- */
+.starter-prompts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+  width: 100%;
+  max-width: 600px;
+  margin-top: var(--space-xl);
+}
+
+.starter-prompt-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: var(--space-md);
+  background: var(--bg-glass);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  min-height: 100px;
+}
+
+.starter-prompt-card:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-glass-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.starter-prompt-icon {
+  font-size: 1.2rem;
+  margin-bottom: var(--space-xs);
+}
+
+.starter-prompt-text {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.starter-prompt-card:hover .starter-prompt-text {
+  color: var(--text-primary);
+}
+
+@media (max-width: 600px) {
+  .starter-prompts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- Copy Response Button Overlay --- */
+.message-bubble {
+  position: relative;
+  padding-bottom: 24px; /* Space for the bottom hover button */
+}
+
+.user-bubble {
+  padding-bottom: 12px; /* User messages don't need copy button space */
+}
+
+.btn-copy-bubble {
+  position: absolute;
+  bottom: 8px;
+  right: 12px;
+  opacity: 0;
+  pointer-events: none;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.message-bubble:hover .btn-copy-bubble {
+  opacity: 0.95;
+  pointer-events: auto;
+}
+
+.btn-copy-bubble:hover {
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+  background: var(--bg-glass-hover);
+  transform: scale(1.03);
+}
+

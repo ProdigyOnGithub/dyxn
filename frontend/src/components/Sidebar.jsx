@@ -1,8 +1,7 @@
 import { useAuth } from '../context/AuthContext';
 import ThemeToggle from './ThemeToggle';
-import UploadPanel from './UploadPanel';
 
-export default function Sidebar({ sessions, activeSession, onSelectSession, onNewSession }) {
+export default function Sidebar({ sessions, activeSession, onSelectSession, onNewSession, onDeleteSession }) {
   const { user, logout } = useAuth();
 
   return (
@@ -41,13 +40,20 @@ export default function Sidebar({ sessions, activeSession, onSelectSession, onNe
           >
             <span className="session-icon">💬</span>
             <span className="session-title">{session.title || 'New Chat'}</span>
+            <button
+              className="btn-delete-session"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeleteSession(session.id);
+              }}
+              title="Delete conversation"
+              aria-label="Delete conversation"
+            >
+              🗑️
+            </button>
           </div>
         ))}
       </div>
-
-      {/* Upload Section */}
-      <div className="sidebar-section-label">Upload Documents</div>
-      <UploadPanel />
 
       {/* Footer */}
       <div className="sidebar-footer">
@@ -64,3 +70,4 @@ export default function Sidebar({ sessions, activeSession, onSelectSession, onNe
     </aside>
   );
 }
+

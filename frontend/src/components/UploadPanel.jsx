@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import api from '../api/client';
 import toast from 'react-hot-toast';
 
-export default function UploadPanel() {
+export default function UploadPanel({ onClose }) {
   const [activeTab, setActiveTab] = useState('textbook');
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -76,7 +76,17 @@ export default function UploadPanel() {
 
   return (
     <div className="upload-section">
+      <div className="upload-header">
+        <span className="upload-title">Upload Study Materials</span>
+        {onClose && (
+          <button className="btn-close-modal" onClick={onClose} title="Close upload modal">
+            ✕
+          </button>
+        )}
+      </div>
+
       <div className="upload-tabs">
+
         {tabs.map((tab) => (
           <button
             key={tab.id}

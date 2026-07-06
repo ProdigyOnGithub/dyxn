@@ -6,9 +6,9 @@
 
 - [x] **Fixing Auth, Chunk/Embed queue**: Ensuring users can authenticate properly and documents are being transferred from queue to queue for efficient background processing
 
-- [ ] **Chatbot Functionality**: Only the latex agent has been built till now, now need to add a chatbot which answers based on context
+- [x] **Chatbot Functionality**: Only the latex agent has been built till now, now need to add a chatbot which answers based on context
 
-- [ ] **QoL Changes**: Pretty shitty inefficient code right now, need to make it clean with core.llm and additional changes for proper llm calling, imports, etc
+- [ ] **QoL Changes**: Pretty shitty inefficient code right now, need to make it clean with core.llm and additional changes for proper llm calling, imports, etc (not priority)
 
 - [ ] **Frontend**: Have a simple frontend supporting all functionality
 

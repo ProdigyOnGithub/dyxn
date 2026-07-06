@@ -1,8 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import api from '../api/client';
 import Sidebar from '../components/Sidebar';
 import ChatWindow from '../components/ChatWindow';
 import ChatInput from '../components/ChatInput';
+import UploadPanel from '../components/UploadPanel';
 import toast from 'react-hot-toast';
 
 export default function ChatPage() {
@@ -11,8 +12,23 @@ export default function ChatPage() {
   // Store messages per session: { [sessionId]: [{ role, content, sources }] }
   const [messagesBySession, setMessagesBySession] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
   const activeMessages = activeSessionId ? (messagesBySession[activeSessionId] || []) : [];
+
+  // Fetch all sessions on mount
+  const fetchSessions = useCallback(async () => {
+    try {
+      const response = await api.get('/sessions');
+      setSessions(response.data);
+    } catch (error) {
+      toast.error('Failed to load conversations.');
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions]);
 
   const createNewSession = useCallback(async () => {
     try {
@@ -26,9 +42,40 @@ export default function ChatPage() {
     }
   }, []);
 
-  const selectSession = useCallback((sessionId) => {
+  const selectSession = useCallback(async (sessionId) => {
     setActiveSessionId(sessionId);
+    // Fetch messages from backend for the selected session
+    setIsLoading(true);
+    try {
+      const response = await api.get(`/sessions/${sessionId}/messages`);
+      setMessagesBySession((prev) => ({
+        ...prev,
+        [sessionId]: response.data,
+      }));
+    } catch (error) {
+      toast.error('Failed to load conversation history.');
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  const deleteSession = useCallback(async (sessionId) => {
+    try {
+      await api.delete(`/sessions/${sessionId}`);
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      setMessagesBySession((prev) => {
+        const copy = { ...prev };
+        delete copy[sessionId];
+        return copy;
+      });
+      if (activeSessionId === sessionId) {
+        setActiveSessionId(null);
+      }
+      toast.success('Conversation deleted.');
+    } catch (error) {
+      toast.error('Failed to delete conversation.');
+    }
+  }, [activeSessionId]);
 
   const sendMessage = useCallback(async (text) => {
     if (!activeSessionId) {
@@ -39,7 +86,6 @@ export default function ChatPage() {
         setSessions((prev) => [newSession, ...prev]);
         setActiveSessionId(newSession.id);
         setMessagesBySession((prev) => ({ ...prev, [newSession.id]: [] }));
-        // Wait for state and send with the new session
         sendToSession(newSession.id, text);
       } catch (error) {
         toast.error('Failed to create session.');
@@ -58,7 +104,7 @@ export default function ChatPage() {
       [sessionId]: [...(prev[sessionId] || []), userMsg],
     }));
 
-    // Update session title to first message if it's still "New Chat"
+    // Update session title locally first
     setSessions((prev) =>
       prev.map((s) =>
         s.id === sessionId && s.title === 'New Chat'
@@ -108,21 +154,60 @@ export default function ChatPage() {
         activeSession={activeSessionId}
         onSelectSession={selectSession}
         onNewSession={createNewSession}
+        onDeleteSession={deleteSession}
       />
 
       <main className="chat-area">
-        <div className="chat-header">
-          <h1 className="chat-header-title">
-            {activeSessionId
-              ? sessions.find((s) => s.id === activeSessionId)?.title || 'Chat'
-              : 'DYXN AI Assistant'}
-          </h1>
-        </div>
+        {activeSessionId ? (
+          <>
+            <div className="chat-header">
+              <h1 className="chat-header-title">
+                {sessions.find((s) => s.id === activeSessionId)?.title || 'Chat'}
+              </h1>
+              <div className="chat-header-actions">
+                <button
+                  className="btn-upload-trigger"
+                  onClick={() => setShowUploadModal(true)}
+                  title="Upload course material"
+                >
+                  📚 Upload Materials
+                </button>
+              </div>
+            </div>
 
-        <ChatWindow messages={activeMessages} isLoading={isLoading} />
+            <ChatWindow
+              messages={activeMessages}
+              isLoading={isLoading}
+              onSendPrompt={sendMessage}
+            />
 
-        <ChatInput onSend={sendMessage} disabled={isLoading} />
+            <ChatInput onSend={sendMessage} disabled={isLoading} />
+          </>
+        ) : (
+          <div className="chat-dashboard-container">
+            <div className="chat-dashboard-card animate-fade-in-up">
+              <span className="dashboard-logo-icon">🧠</span>
+              <h2>Welcome to DYXN AI</h2>
+              <p>
+                Rethink your studying. Select an existing conversation from the sidebar or start a new chat below to begin.
+              </p>
+              <button className="btn-dashboard-start" onClick={createNewSession}>
+                ＋ Start a New Chat
+              </button>
+            </div>
+          </div>
+        )}
       </main>
+
+      {/* Floating Upload Modal */}
+      {showUploadModal && (
+        <div className="modal-overlay" onClick={() => setShowUploadModal(false)}>
+          <div className="modal-content animate-fade-in-up" onClick={(e) => e.stopPropagation()}>
+            <UploadPanel onClose={() => setShowUploadModal(false)} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

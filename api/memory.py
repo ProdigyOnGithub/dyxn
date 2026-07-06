@@ -17,7 +17,7 @@ except Exception:
 
 llm = get_llm()
 
-def save_message(user_id: int, session_id: str, role: str, message: str):
+def save_message(user_id: int, session_id: str, role: str, message: str, sources: list = None):
     """Saves a single message into Qdrant with a zero vector (no embedding needed for sequential chat)."""
     zero_vec = [0.0] * config.VECTOR_SIZE
     point = PointStruct(
@@ -29,10 +29,38 @@ def save_message(user_id: int, session_id: str, role: str, message: str):
             "role": role,
             "message": message,
             "timestamp": time.time(),
-            "is_summarized": False
+            "is_summarized": False,
+            "sources": sources or []
         }
     )
     client.upsert(collection_name=config.MEMORY_COLLECTION_NAME, points=[point])
+
+
+def get_session_messages(user_id: int, session_id: str) -> list[dict]:
+    """Fetches all messages for a specific session sorted by timestamp, excluding summaries."""
+    records, _ = client.scroll(
+        collection_name=config.MEMORY_COLLECTION_NAME,
+        scroll_filter=Filter(
+            must=[
+                FieldCondition(key="session_id", match=MatchValue(value=session_id)),
+                FieldCondition(key="user_id", match=MatchValue(value=user_id))
+            ],
+            must_not=[
+                FieldCondition(key="role", match=MatchValue(value="system_summary"))
+            ]
+        ),
+        limit=100
+    )
+    sorted_records = sorted(records, key=lambda x: x.payload.get("timestamp", 0))
+    return [
+        {
+            "role": r.payload.get("role"),
+            "content": r.payload.get("message"),
+            "sources": r.payload.get("sources", [])
+        }
+        for r in sorted_records
+    ]
+
 
 
 def get_context_for_inference(user_id: int, session_id: str, window_size: int = 5):
