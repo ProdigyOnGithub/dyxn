@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks, File, UploadFile
+from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -12,6 +12,8 @@ import json
 from pathlib import Path
 from urllib.parse import urlparse, unquote
 import urllib.request
+from contextlib import asynccontextmanager
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -32,13 +34,21 @@ from api.auth import (
 from api.memory import get_context_for_inference, save_message, summarize_old_messages, get_session_messages
 from task_queue.ingest import upload_doc
 from agents.chatbot import chatbot_agent
-
+from api.pubsub_listener import listen_progress
+from api.websocket_manager import manager
 
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="DYXN AI Backend")
+@asynccontextmanager
+async def lifespan(app):
+    asyncio.create_task(
+        listen_progress()
+    )
 
+    yield
+
+app = FastAPI(title="DYXN AI Backend", lifespan=lifespan)
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
@@ -239,5 +249,22 @@ def chat(session_id:str, chat_message:ChatMessage, background_tasks:BackgroundTa
     return {"response": llm_response,"sources" :sources}
 
 
+@app.websocket("/ws/progress/{document_id}")
+async def progress_socket(websocket: WebSocket, document_id: str):
+    await manager.connect(websocket, document_id)
+
+    try:
+
+        while True:
+
+            # Keep connection alive.
+            await websocket.receive_text()
+
+    except WebSocketDisconnect:
+
+        manager.disconnect(
+            websocket,
+            document_id
+        )
 
 

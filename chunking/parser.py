@@ -39,7 +39,7 @@ class PDFParser:
 
         image_np = np.array(image)
 
-        result, _ = OCR_ENGINE.ocr(image_np)
+        result, _ = OCR_ENGINE(image_np)
 
         return "\n".join([x[1] for x in result])
     

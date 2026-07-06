@@ -2,6 +2,10 @@ import json
 from core.redis import redis_client
 from chunking.pipeline import build_chunks
 import uuid
+from task_queue.progress import DocumentProgressManager
+
+
+progress = DocumentProgressManager()
 
 GROUP = "chunkers"
 CONSUMER = "worker_1"
@@ -34,8 +38,13 @@ while True:
     for msg_id, data in entries:
 
         payload = json.loads(data["data"])
+
+        progress.start_chunking(payload["document_id"])
+
         chunks = build_chunks(payload["path"], payload["source_type"])
+
         print(chunks)
+        progress.initialize_embedding(payload["document_id"], len(chunks))
         print("chunks built")
 
         for i,chunk in enumerate(chunks):
