@@ -9,33 +9,18 @@ class ConnectionManager:
         # document_id -> set(WebSocket)
         self.connections = defaultdict(set)
 
-    async def connect(
-        self,
-        websocket: WebSocket,
-        document_id: str
-    ):
-
+    async def connect(self, websocket: WebSocket, document_id: str):
         await websocket.accept()
 
         self.connections[document_id].add(websocket)
 
-    def disconnect(
-        self,
-        websocket: WebSocket,
-        document_id: str
-    ):
-
+    def disconnect(self, websocket: WebSocket, document_id: str):
         self.connections[document_id].discard(websocket)
 
         if not self.connections[document_id]:
             del self.connections[document_id]
 
-    async def broadcast(
-        self,
-        document_id: str,
-        message: dict
-    ):
-
+    async def broadcast(self, document_id: str, message: dict):
         dead = []
 
         for ws in self.connections.get(document_id, set()):
