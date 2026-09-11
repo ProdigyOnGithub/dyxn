@@ -145,14 +145,15 @@ class DocumentProgressManager:
             path = path.decode()
 
         try:
-
-            Path(path).unlink(
-                missing_ok=True
-            )
+            p = Path(path)
+            if p.exists():
+                p.unlink()
+                print(f"Successfully deleted processed file: {path}")
+            else:
+                print(f"File not found for deletion: {path}")
 
         except Exception as e:
-
-            print(e)
+            print(f"Failed to delete file {path}: {e}")
 
         self.redis.hset(
             key,

@@ -133,7 +133,7 @@ async def upload_document(file: UploadFile = File(...), current_user: User = Dep
     destination_path = (
         uploads_dir /
         f"{document_id}_{safe_filename}"
-    )
+    ).resolve()
 
     try:
 
