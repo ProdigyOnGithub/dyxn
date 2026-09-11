@@ -17,7 +17,7 @@ import asyncio
 
 logger = logging.getLogger(__name__)
 
-from schemas import UserCreate, Token, ChatMessage, DocumentUploadRequest
+from schemas import UserCreate, Token, ChatMessage, DocumentUploadRequest, LatexRequest
 
 from core.config import config
 from core.redis import redis_client
@@ -36,6 +36,7 @@ from task_queue.ingest import upload_doc
 from agents.chatbot import chatbot_agent
 from api.pubsub_listener import listen_progress
 from api.websocket_manager import manager
+from graph import graph
 
 
 Base.metadata.create_all(bind=engine)
@@ -267,4 +268,26 @@ async def progress_socket(websocket: WebSocket, document_id: str):
             document_id
         )
 
+@app.post("/generate-latex", status_code=status.HTTP_200_OK)
+def generate_latex(request: LatexRequest, current_user: User = Depends(get_current_user)):
+    initial_state = {
+        "syllabus_topic": request.syllabus_topic,
+        "retrieved_chunks": [],
+        "retrieved_metadata": [],
+        "working_notes": "",
+        "synthesized_section": "",
+        "latex_output": "",
+        "evaluation_score": 0.0
+    }
+    
+    try:
+        result = graph.invoke(initial_state)
+        return {
+            "topic": request.syllabus_topic,
+            "latex_output": result.get("latex_output", ""),
+            "evaluation_score": result.get("evaluation_score", 0.0)
+        }
+    except Exception as e:
+        logger.error(f"Error generating latex: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error generating LaTeX notes")
 
