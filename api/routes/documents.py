@@ -34,6 +34,10 @@ async def upload_document(file: UploadFile = File(...)):
             detail=f"Failed to save file: {e}",
         )
 
+    from api.services.progress_manager import DocumentProgressManager
+    progress = DocumentProgressManager()
+    progress.create(document_id, ANON_OWNER_ID, str(destination_path))
+
     redis_client.xadd(
         "document_processing",
         {
@@ -53,3 +57,15 @@ async def upload_document(file: UploadFile = File(...)):
         "filename": safe_filename,
         "status": "queued",
     }
+
+from fastapi import WebSocket, WebSocketDisconnect
+from api.services.websocket_manager import manager
+
+@router.websocket("/ws/progress/{document_id}")
+async def progress_socket(websocket: WebSocket, document_id: str):
+    await manager.connect(websocket, document_id)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, document_id)

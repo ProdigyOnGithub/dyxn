@@ -25,7 +25,7 @@ class PDFParser:
 
         pix = page.get_pixmap(dpi=200)
         image = Image.open(io.BytesIO(pix.tobytes("png")))
-        result, _ = self.ocr_engine.ocr(np.array(image))
+        result, _ = self.ocr_engine(np.array(image))
         if not result:
             return ""
         return "\n".join(x[1] for x in result)
@@ -93,19 +93,40 @@ class DocumentProcessor:
         return all_chunks
 
     def process_document(self, file_path: str, source_type: str, owner_id: str, document_id: str) -> None:
-        """Parse → chunk → embed → upsert in one go. Workers usually split this."""
+        """Parse → chunk → embed → upsert in one go with real-time progress tracking."""
+        from api.services.progress_manager import DocumentProgressManager
+        progress = DocumentProgressManager()
+        
+        progress.start_chunking(document_id)
         all_chunks = self.parse_and_chunk(file_path, source_type, document_id)
+        
         if not all_chunks:
+            progress.finish(document_id)
             return
 
-        embeddings = self.embedding_provider.embed_batch([c["text"] for c in all_chunks])
+        total_chunks = len(all_chunks)
+        progress.initialize_embedding(document_id, total_chunks)
+
         collection = (
             self.config.TEXTBOOK_COLLECTION_NAME
             if source_type == "textbook"
             else self.config.SLIDES_COLLECTION_NAME
         )
-        points = []
-        for chunk_meta, vector in zip(all_chunks, embeddings):
-            chunk_meta["owner_id"] = owner_id
-            points.append({"id": str(uuid.uuid4()), "vector": vector, "payload": chunk_meta})
-        self.vector_store.upsert(collection, points)
+
+        batch_size = 5
+        import uuid
+        for i in range(0, total_chunks, batch_size):
+            batch = all_chunks[i:i + batch_size]
+            texts = [c["text"] for c in batch]
+            embeddings = self.embedding_provider.embed_batch(texts)
+            
+            points = []
+            for chunk_meta, vector in zip(batch, embeddings):
+                chunk_meta["owner_id"] = owner_id
+                points.append({"id": str(uuid.uuid4()), "vector": vector, "payload": chunk_meta})
+            
+            self.vector_store.upsert(collection, points)
+            
+            # Emit progress for each chunk in the batch
+            for _ in range(len(batch)):
+                progress.complete_chunk(document_id)
