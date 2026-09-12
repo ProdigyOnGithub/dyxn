@@ -2,12 +2,12 @@ from typing import Any
 
 from langgraph.graph import END, StateGraph
 
-from agents.evaluator import EvaluatorAgent
-from agents.latex_agent import LatexAgent
-from agents.planner import PlannerAgent
-from agents.retriever import RetrieverAgent
-from agents.state import GraphState
-from agents.synthesizer import SynthesizerAgent
+from agents.latex.evaluator import EvaluatorAgent
+from agents.latex.latex_agent import LatexAgent
+from agents.latex.planner import PlannerAgent
+from agents.latex.retriever import RetrieverAgent
+from agents.latex.state import GraphState
+from agents.latex.synthesizer import SynthesizerAgent
 
 
 class WorkflowOrchestrator:
