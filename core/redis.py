@@ -1,4 +1,5 @@
 from redis import Redis
+
 from core.config import config
 
 redis_client = Redis(
@@ -8,5 +9,3 @@ redis_client = Redis(
     socket_timeout=None,
     socket_connect_timeout=5,
 )
-
-print(redis_client.ping())

@@ -1,17 +1,14 @@
-from core.llm import get_llm
-import schemas
 import json
+from typing import Any, Dict
+
+import api.schemas as schemas
+from agents.base_agent import BaseAgent
 
 
-llm = get_llm()
-
-THRESHOLD = 8.0
-
-def evaluation_agent(state):
-
-    notes = state["latex_output"]
-
-    prompt = f"""
+class EvaluatorAgent(BaseAgent):
+    def __call__(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        notes = state.get("latex_output", "")
+        prompt = f"""
 Evaluate the following educational notes.
 
 Score from 0-10 for:
@@ -36,29 +33,22 @@ Required schema:
 NOTES:
 {notes}
 """
-    structured_llm = llm.with_structured_output(schemas.EvalOutput)
-    content = structured_llm.invoke(prompt)
+        try:
+            content = self.llm.with_structured_output(schemas.EvalOutput).invoke(prompt)
+            if isinstance(content, str):
+                parsed = json.loads(content)
+                score = float(parsed.get("score", 5.0))
+                feedback = parsed.get("feedback", [])
+            else:
+                score = float(content.score)
+                feedback = content.feedback
+            if not isinstance(feedback, list):
+                feedback = [str(feedback)]
+        except Exception as e:
+            self.logger.error(f"Evaluation failed: {e}")
+            score = 5.0
+            feedback = ["Evaluator failed to return valid output.", str(e)]
 
-    try:
-        parsed = json.loads(content)
-
-        score = float(parsed.get("score", 5.0))
-
-        feedback = parsed.get("feedback", [])
-
-        if not isinstance(feedback, list):
-            feedback = [str(feedback)]
-
-    except Exception as e:
-
-        score = 5.0
-
-        feedback = [
-            "Evaluator failed to return valid JSON.",
-            str(e)
-        ]
-
-    state["evaluation_score"] = score
-    state["evaluation_feedback"] = feedback
-
-    return state
+        state["evaluation_score"] = score
+        state["evaluation_feedback"] = feedback
+        return state

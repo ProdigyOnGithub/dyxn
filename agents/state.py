@@ -1,4 +1,4 @@
-from typing import TypedDict, List, Dict
+from typing import Dict, List, TypedDict
 
 
 class GraphState(TypedDict):
@@ -13,3 +13,4 @@ class GraphState(TypedDict):
     latex_output: str
     evaluation_score: float
     evaluation_feedback: List[str]
+    iteration_count: int

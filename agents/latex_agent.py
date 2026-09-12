@@ -1,8 +1,6 @@
-from core.llm import get_llm
+from typing import Any, Dict
 
-
-llm = get_llm()
-
+from agents.base_agent import BaseAgent
 
 LATEX_TEMPLATE = r"""
 \documentclass{article}
@@ -19,11 +17,11 @@ LATEX_TEMPLATE = r"""
 \end{document}
 """
 
-def latex_agent(state):
 
-    notes = state["synthesized_section"]
-
-    prompt = f"""
+class LatexAgent(BaseAgent):
+    def __call__(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        notes = state.get("synthesized_section", "")
+        prompt = f"""
 Convert the following notes into clean LaTeX.
 
 Requirements:
@@ -36,10 +34,6 @@ Requirements:
 NOTES:
 {notes}
 """
-    response = llm.invoke(prompt)
-
-    latex_doc = LATEX_TEMPLATE.format(content=response.content)
-
-    state["latex_output"] = latex_doc
-
-    return state
+        latex_body = self.llm.invoke(prompt).content
+        state["latex_output"] = LATEX_TEMPLATE.format(content=latex_body)
+        return state

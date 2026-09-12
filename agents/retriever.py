@@ -1,50 +1,49 @@
-from retrieval.retriever import Retriever
-from db.qdrant import client
-from core.config import config
-from ingestion.embedding import embed_text
-import logging
+from typing import Any, Dict
 
-logger = logging.getLogger(__name__)
+from agents.base_agent import BaseAgent
+from core.config import Config
+from core.interfaces.embedding_provider import EmbeddingProviderInterface
+from core.interfaces.llm_provider import LLMProviderInterface
+from core.interfaces.vector_store import VectorStoreInterface
 
 
-tb_retriever = None
-if config.TEXTBOOK_COLLECTION_NAME:
-    tb_retriever = Retriever(client, config.TEXTBOOK_COLLECTION_NAME, embed_text)
+class RetrieverAgent(BaseAgent):
+    def __init__(
+        self,
+        llm: LLMProviderInterface,
+        config: Config,
+        vector_store: VectorStoreInterface,
+        embedding_provider: EmbeddingProviderInterface,
+    ):
+        super().__init__(llm, config)
+        self.vector_store = vector_store
+        self.embedding_provider = embedding_provider
 
-sl_retriever = None
-if config.SLIDES_COLLECTION_NAME:
-    sl_retriever = Retriever(client, config.SLIDES_COLLECTION_NAME, embed_text)
-
-def retrieval_agent(state):
-
-    query = state["syllabus_topic"]
-    
-    results = []
-    
-    if tb_retriever:
+    def __call__(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        query = state.get("syllabus_topic", "")
         try:
-            results.extend(tb_retriever.retrieve(query, limit=10))
+            query_vector = self.embedding_provider.embed_text(query)
         except Exception as e:
-            logger.error(f"Retrieval failed for collection={config.TEXTBOOK_COLLECTION_NAME} query='{query}'. Error: {e}")
-            
-    if sl_retriever:
-        try:
-            results.extend(sl_retriever.retrieve(query, limit=10))
-        except Exception as e:
-            logger.error(f"Retrieval failed for collection={config.SLIDES_COLLECTION_NAME} query='{query}'. Error: {e}")
+            self.logger.error(f"Failed to embed query: {e}")
+            return state
 
-    seen = set()
-    unique = []
+        results = []
+        for collection in (self.config.TEXTBOOK_COLLECTION_NAME, self.config.SLIDES_COLLECTION_NAME):
+            if not collection:
+                continue
+            try:
+                results.extend(self.vector_store.search(collection, query_vector, limit=10))
+            except Exception as e:
+                self.logger.error(f"Retrieval failed for {collection}: {e}")
 
-    for doc in results:
+        seen = set()
+        unique = []
+        for doc in results:
+            text = doc.get("payload", {}).get("text", "")
+            if text and text not in seen:
+                unique.append(doc)
+                seen.add(text)
 
-        text = doc["text"]
-
-        if text not in seen:
-            unique.append(doc)
-            seen.add(text)
-
-    state["retrieved_chunks"] = [x["text"] for x in unique]
-    state["retrieved_metadata"] = unique
-
-    return state
+        state["retrieved_chunks"] = [d.get("payload", {}).get("text", "") for d in unique]
+        state["retrieved_metadata"] = [d.get("payload", {}) for d in unique]
+        return state
