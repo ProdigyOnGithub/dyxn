@@ -24,3 +24,6 @@ class ChatMessage(BaseModel):
 class DocumentUploadRequest(BaseModel):
     url: str
     filename: Optional[str] = None
+
+class LatexRequest(BaseModel):
+    syllabus_topic: str

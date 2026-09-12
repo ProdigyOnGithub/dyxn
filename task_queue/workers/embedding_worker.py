@@ -1,7 +1,12 @@
 import json
+
 from core.redis import redis_client
 from ingestion.embedding import embed_text
 from ingestion.ingest import upsert_chunk
+from task_queue.progress import DocumentProgressManager
+
+
+progress = DocumentProgressManager()
 
 GROUP = "embedders"
 CONSUMER = "embedder_1"
@@ -44,16 +49,15 @@ while True:
             chunk_id=chunk_id,
             embedding=vector,
             payload={
-                "owner_id":payload["owner_id"],
-                "document_id":payload["document_id"],
-                "chunk_index":payload["chunk_index"],
-                "source_type":payload["source_type"],
-                "text":payload["text"],
-                "source_file":payload.get("source_file",""),
-                "page":payload.get("page"),
-                "heading":payload.get("heading","")
+                "owner_id": payload["owner_id"],
+                "document_id": payload["document_id"],
+                "chunk_index": payload["chunk_index"],
+                "source_type": payload["source_type"],
+                "text": payload["text"]
             }
         )
+
+        progress.complete_chunk(payload["document_id"])
         print("embedding sent to qdrant")
 
         redis_client.xack(

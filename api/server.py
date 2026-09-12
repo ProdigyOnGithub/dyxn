@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks, File, UploadFile
+from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -12,15 +12,17 @@ import json
 from pathlib import Path
 from urllib.parse import urlparse, unquote
 import urllib.request
+from contextlib import asynccontextmanager
+import asyncio
 
 logger = logging.getLogger(__name__)
 
-from schemas import UserCreate, Token, ChatMessage, DocumentUploadRequest
+from schemas import UserCreate, Token, ChatMessage, DocumentUploadRequest, LatexRequest
 
 from core.config import config
 from core.redis import redis_client
 from db.postgres import engine, get_db
-from db.models import Base, User
+from db.models import Base, User, ChatSession
 from api.auth import (
     get_password_hash, 
     verify_password, 
@@ -29,15 +31,25 @@ from api.auth import (
     record_failed_attempt, 
     reset_failed_attempts
 )
-from api.memory import get_context_for_inference, save_message, summarize_old_messages
+from api.memory import get_context_for_inference, save_message, summarize_old_messages, get_session_messages
 from task_queue.ingest import upload_doc
 from agents.chatbot import chatbot_agent
+from api.pubsub_listener import listen_progress
+from api.websocket_manager import manager
+from graph import graph
 
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="DYXN AI Backend")
+@asynccontextmanager
+async def lifespan(app):
+    asyncio.create_task(
+        listen_progress()
+    )
 
+    yield
+
+app = FastAPI(title="DYXN AI Backend", lifespan=lifespan)
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
@@ -122,7 +134,7 @@ async def upload_document(file: UploadFile = File(...), current_user: User = Dep
     destination_path = (
         uploads_dir /
         f"{document_id}_{safe_filename}"
-    )
+    ).resolve()
 
     try:
 
@@ -161,14 +173,56 @@ async def upload_document(file: UploadFile = File(...), current_user: User = Dep
 
 
 @app.post("/sessions", status_code=status.HTTP_201_CREATED)
-def create_session(current_user: User = Depends(get_current_user)):
-    """Creates a new AI chat session ID."""
+def create_session(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Creates a new AI chat session in the DB."""
+    import time
     session_id = str(uuid.uuid4())
+    new_session = ChatSession(id=session_id, user_id=current_user.id, title="New Chat", created_at=time.time())
+    db.add(new_session)
+    db.commit()
     return {"id": session_id, "title": "New Chat"}
 
-@app.post("/sessions/{session_id}/chat")
-def chat(session_id:str, chat_message:ChatMessage,background_tasks:BackgroundTasks, current_user: User=Depends(get_current_user)):
+@app.get("/sessions")
+def list_sessions(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Lists all chat sessions for the current user."""
+    sessions = db.query(ChatSession).filter(ChatSession.user_id == current_user.id).order_by(ChatSession.created_at.desc()).all()
+    return [{"id": s.id, "title": s.title} for s in sessions]
 
+@app.delete("/sessions/{session_id}")
+def delete_session(session_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Deletes a chat session and all its messages."""
+    session_obj = db.query(ChatSession).filter(ChatSession.id == session_id, ChatSession.user_id == current_user.id).first()
+    if not session_obj:
+        raise HTTPException(status_code=404, detail="Session not found")
+    db.delete(session_obj)
+    db.commit()
+    
+    # Delete from Qdrant memory collection
+    try:
+        from qdrant_client.models import Filter, FieldCondition, MatchValue, FilterSelector
+        client.delete(
+            collection_name=config.MEMORY_COLLECTION_NAME,
+            points_selector=FilterSelector(
+                filter=Filter(
+                    must=[
+                        FieldCondition(key="session_id", match=MatchValue(value=session_id)),
+                        FieldCondition(key="user_id", match=MatchValue(value=current_user.id))
+                    ]
+                )
+            )
+        )
+    except Exception as e:
+        logger.error(f"Error deleting Qdrant points for session {session_id}: {e}")
+        
+    return {"message": "Session deleted successfully"}
+
+@app.get("/sessions/{session_id}/messages")
+def get_messages(session_id: str, current_user: User = Depends(get_current_user)):
+    """Retrieves all chat messages for a session."""
+    return get_session_messages(current_user.id, session_id)
+
+@app.post("/sessions/{session_id}/chat")
+def chat(session_id:str, chat_message:ChatMessage, background_tasks:BackgroundTasks, db: Session = Depends(get_db), current_user: User=Depends(get_current_user)):
     save_message(current_user.id, session_id,"user",chat_message.message)
     context = get_context_for_inference(current_user.id,session_id,window_size=5)
 
@@ -184,9 +238,56 @@ def chat(session_id:str, chat_message:ChatMessage,background_tasks:BackgroundTas
         logger.error(f"error in session {session_id}:{E} from chatbot",exc_info=True)
         llm_response = "error while processing question"
         sources = []
-    save_message(current_user.id, session_id,"ai",llm_response)
+
+    # Update session title if it is "New Chat"
+    session_obj = db.query(ChatSession).filter(ChatSession.id == session_id, ChatSession.user_id == current_user.id).first()
+    if session_obj and session_obj.title == "New Chat":
+        session_obj.title = chat_message.message[:40] + ("..." if len(chat_message.message) > 40 else "")
+        db.commit()
+
+    save_message(current_user.id, session_id,"ai",llm_response, sources=sources)
     background_tasks.add_task(summarize_old_messages,current_user.id,session_id,5)
     return {"response": llm_response,"sources" :sources}
 
 
+@app.websocket("/ws/progress/{document_id}")
+async def progress_socket(websocket: WebSocket, document_id: str):
+    await manager.connect(websocket, document_id)
+
+    try:
+
+        while True:
+
+            # Keep connection alive.
+            await websocket.receive_text()
+
+    except WebSocketDisconnect:
+
+        manager.disconnect(
+            websocket,
+            document_id
+        )
+
+@app.post("/generate-latex", status_code=status.HTTP_200_OK)
+def generate_latex(request: LatexRequest, current_user: User = Depends(get_current_user)):
+    initial_state = {
+        "syllabus_topic": request.syllabus_topic,
+        "retrieved_chunks": [],
+        "retrieved_metadata": [],
+        "working_notes": "",
+        "synthesized_section": "",
+        "latex_output": "",
+        "evaluation_score": 0.0
+    }
+    
+    try:
+        result = graph.invoke(initial_state)
+        return {
+            "topic": request.syllabus_topic,
+            "latex_output": result.get("latex_output", ""),
+            "evaluation_score": result.get("evaluation_score", 0.0)
+        }
+    except Exception as e:
+        logger.error(f"Error generating latex: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error generating LaTeX notes")
 
