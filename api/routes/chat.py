@@ -68,7 +68,7 @@ def chat(session_id: str, chat_message: ChatMessage, background_tasks: Backgroun
 @router.post("/generate-latex")
 def generate_latex(request: LatexRequest):
     """Generates LaTeX notes for a given topic."""
-    from agents.orchestrator import WorkflowOrchestrator
+    from agents.latex.orchestrator import WorkflowOrchestrator
     
     # We would inject concrete LLM/Vector providers here in production
     # For now we'll just mock the orchestrator return or leave as stub
