@@ -5,7 +5,7 @@ from core.config import Config
 from core.interfaces.embedding_provider import EmbeddingProviderInterface
 from core.interfaces.vector_store import VectorStoreInterface
 from workers.base_worker import BaseWorker
-
+from api.services.progress_manager import DocumentProgressManager
 
 class EmbeddingWorker(BaseWorker):
     def __init__(
@@ -22,21 +22,41 @@ class EmbeddingWorker(BaseWorker):
         self.config = config
         self.embedding_provider = embedding_provider
         self.vector_store = vector_store
+        self.progress = DocumentProgressManager()
 
     def process_message(self, payload: Dict[str, Any]):
         print(f"Embedding chunk: {payload['chunk_id']}")
         vector = self.embedding_provider.embed_text(payload["text"])
+        
         collection = (
             self.config.TEXTBOOK_COLLECTION_NAME
             if payload.get("source_type") == "textbook"
             else self.config.SLIDES_COLLECTION_NAME
         )
+        
         self.vector_store.upsert(
             collection,
             [{"id": str(uuid.uuid4()), "vector": vector, "payload": payload}],
         )
-        print("Upserted chunk to Qdrant.")
+        
+        # Advance the progress bar for this specific chunk
+        self.progress.complete_chunk(payload["document_id"])
+        print(f"Upserted chunk {payload['chunk_id']} to Qdrant.")
 
 
 if __name__ == "__main__":
-    pass
+    from core.providers.sentence_transformer_provider import SentenceTransformerProvider
+    from db.qdrant_store import QdrantVectorStore
+
+    print("Booting EmbeddingWorker... loading model...")
+    config = Config()
+    
+    embedding_provider = SentenceTransformerProvider("all-MiniLM-L6-v2")
+    vector_store = QdrantVectorStore(config)
+    
+    worker = EmbeddingWorker(
+        config=config,
+        embedding_provider=embedding_provider,
+        vector_store=vector_store
+    )
+    worker.run(worker.process_message)
