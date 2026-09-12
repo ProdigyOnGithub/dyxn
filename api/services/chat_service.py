@@ -2,6 +2,9 @@ import time
 import uuid
 from typing import Any, Dict, List
 
+from sqlalchemy.orm import Session
+from sqlalchemy import desc
+
 from agents.chatbot.chatbot import ChatbotAgent
 from core.config import Config
 from core.interfaces.context_provider import ContextProviderInterface
@@ -9,108 +12,114 @@ from core.interfaces.chat_storage import ChatStorageInterface
 from core.interfaces.embedding_provider import EmbeddingProviderInterface
 from core.interfaces.llm_provider import LLMProviderInterface
 from core.interfaces.vector_store import VectorStoreInterface
+from db.models import ChatMessage, ChatSession
 
 
-class QdrantChatStorage(ChatStorageInterface):
-    """Chat memory in Qdrant."""
+class HybridChatStorage(ChatStorageInterface):
+    """Chat memory stored in PostgreSQL for exact history and Qdrant for semantic search."""
 
     def __init__(
         self,
+        db_session: Session,
         config: Config,
         vector_store: VectorStoreInterface,
         embedding_provider: EmbeddingProviderInterface,
     ):
+        self.db = db_session
         self.config = config
         self.vector_store = vector_store
         self.embedding_provider = embedding_provider
 
     def save_message(self, user_id: int, session_id: str, role: str, message: str) -> None:
+        msg_id = str(uuid.uuid4())
+        timestamp = int(time.time())
+        
+        # 1. Save to Postgres
+        sql_msg = ChatMessage(
+            id=msg_id,
+            session_id=session_id,
+            user_id=user_id,
+            role=role,
+            content=message,
+            timestamp=timestamp,
+            is_summarized=0
+        )
+        self.db.add(sql_msg)
+        self.db.commit()
+
+        # 2. Save to Qdrant for semantic capabilities
         point = {
-            "id": str(uuid.uuid4()),
-            "vector": [0.0] * self.config.VECTOR_SIZE,
+            "id": msg_id,
+            "vector": [0.0] * self.config.VECTOR_SIZE, # Placeholder if no sync embedding is done, but typically we would embed here
             "payload": {
                 "user_id": user_id,
                 "session_id": session_id,
                 "role": role,
                 "message": message,
-                "timestamp": time.time(),
+                "timestamp": timestamp,
                 "is_summarized": False,
             },
         }
         self.vector_store.upsert(self.config.MEMORY_COLLECTION_NAME, [point])
 
-    def _scroll(self, must: list, must_not: list | None = None, limit: int = 20):
-        if not hasattr(self.vector_store, "client"):
-            return []
-        from qdrant_client.models import FieldCondition, Filter, MatchValue
-
-        conditions = [
-            FieldCondition(key=k, match=MatchValue(value=v)) for k, v in must
-        ]
-        exclude = [
-            FieldCondition(key=k, match=MatchValue(value=v)) for k, v in (must_not or [])
-        ]
-        records, _ = self.vector_store.client.scroll(
-            collection_name=self.config.MEMORY_COLLECTION_NAME,
-            scroll_filter=Filter(must=conditions, must_not=exclude or None),
-            limit=limit,
-        )
-        return records
-
     def get_messages(self, user_id: int, session_id: str, limit: int = 50) -> List[Dict[str, Any]]:
-        records = self._scroll(
-            must=[("session_id", session_id), ("user_id", user_id), ("is_summarized", False)],
-            must_not=[("role", "system_summary")],
-            limit=limit,
+        # Fetch from Postgres (Chronological)
+        messages = (
+            self.db.query(ChatMessage)
+            .filter(ChatMessage.session_id == session_id, ChatMessage.user_id == user_id, ChatMessage.is_summarized == 0)
+            .order_by(ChatMessage.timestamp.asc())
+            .limit(limit)
+            .all()
         )
-        return [{"id": r.id, "payload": r.payload} for r in records]
+        
+        return [
+            {
+                "id": m.id,
+                "payload": {
+                    "role": m.role,
+                    "message": m.content,
+                    "timestamp": m.timestamp,
+                    "is_summarized": bool(m.is_summarized)
+                }
+            }
+            for m in messages
+        ]
 
     def get_summary(self, user_id: int, session_id: str) -> str:
-        summary_records = self._scroll(
-            must=[("session_id", session_id), ("user_id", user_id), ("role", "system_summary")],
-            limit=1,
+        session_obj = (
+            self.db.query(ChatSession)
+            .filter(ChatSession.id == session_id, ChatSession.user_id == user_id)
+            .first()
         )
-        if summary_records:
-            return summary_records[0].payload.get("message", "")
+        if session_obj and session_obj.summary:
+            return session_obj.summary
         return ""
 
     def update_summary(self, user_id: int, session_id: str, new_summary: str, summarized_message_ids: List[str]) -> None:
-        if not hasattr(self.vector_store, "client"):
-            return
-
-        summary_records = self._scroll(
-            must=[("session_id", session_id), ("user_id", user_id), ("role", "system_summary")],
-            limit=1,
+        # Update Postgres summary
+        session_obj = (
+            self.db.query(ChatSession)
+            .filter(ChatSession.id == session_id, ChatSession.user_id == user_id)
+            .first()
         )
+        if session_obj:
+            session_obj.summary = new_summary
 
-        if summary_records:
-            self.vector_store.delete(self.config.MEMORY_COLLECTION_NAME, [summary_records[0].id])
-
-        self.vector_store.upsert(
-            self.config.MEMORY_COLLECTION_NAME,
-            [
-                {
-                    "id": str(uuid.uuid4()),
-                    "vector": self.embedding_provider.embed_text(new_summary),
-                    "payload": {
-                        "user_id": user_id,
-                        "session_id": session_id,
-                        "role": "system_summary",
-                        "message": new_summary,
-                        "timestamp": time.time(),
-                        "is_summarized": False,
-                    },
-                }
-            ],
-        )
-
-        client = self.vector_store.client
-        for rec_id in summarized_message_ids:
-            client.set_payload(
-                collection_name=self.config.MEMORY_COLLECTION_NAME,
-                payload={"is_summarized": True},
-                points=[rec_id],
+        # Mark Postgres messages as summarized
+        if summarized_message_ids:
+            self.db.query(ChatMessage).filter(ChatMessage.id.in_(summarized_message_ids)).update(
+                {"is_summarized": 1}, synchronize_session=False
             )
+        self.db.commit()
+
+        # Mark Qdrant messages as summarized (Optional but good for consistency)
+        if hasattr(self.vector_store, "client"):
+            for rec_id in summarized_message_ids:
+                self.vector_store.client.set_payload(
+                    collection_name=self.config.MEMORY_COLLECTION_NAME,
+                    payload={"is_summarized": True},
+                    points=[rec_id],
+                )
 
 
 class SlidingWindowContextProvider(ContextProviderInterface):
