@@ -7,6 +7,7 @@ Auth is off for now. Everything just works locally without a token.
 ## Layout
 
 ```
+frontend/            React + Vite UI
 api/                 FastAPI routes + a couple of service classes
 agents/              LangGraph nodes (planner → retriever → synthesizer → latex → evaluator)
                      plus a standalone chatbot that isn't on the graph
@@ -39,6 +40,9 @@ You still need Postgres, Redis, and Qdrant even with auth off, because uploads g
 docker compose up -d redis qdrant postgres
 
 uvicorn api.server:app --reload
+
+# And for the UI
+cd frontend && npm install && npm run dev
 ```
 
 Workers aren't fully wired (no real LLM/embedding providers plugged into `__main__` yet). When they are:
@@ -49,3 +53,5 @@ python -m workers.embedding_worker
 ```
 
 Upload hits `POST /documents/upload`, which dumps a job on the `document_processing` stream. Chat is `POST /chat/sessions` then `POST /chat/sessions/{id}/chat` — the second one still needs the LLM stack hooked up.
+
+The backend also uses WebSockets (`/ws/progress/{document_id}`) tied to Redis PubSub to stream upload progress in real-time to the React frontend.
