@@ -1,3 +1,4 @@
+from api.routes import auth
 from fastapi import FastAPI
 from db.postgres import engine
 from db.models import Base
@@ -17,6 +18,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="dyxn", lifespan=lifespan)
 
+app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(documents.router, prefix="/documents", tags=["documents"])
 
