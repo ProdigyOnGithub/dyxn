@@ -5,15 +5,15 @@ from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
 from core.redis import redis_client
+from api.services.auth_service import AuthService
+from db.models import User
+from fastapi import Depends
 
-# no users while auth is off — workers still expect an owner_id on the payload
-ANON_OWNER_ID = 0
-
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(AuthService.get_current_user)])
 
 
 @router.post("/upload", status_code=status.HTTP_201_CREATED)
-async def upload_document(file: UploadFile = File(...)):
+async def upload_document(file: UploadFile = File(...), current_user: User = Depends(AuthService.get_current_user)):
     uploads_dir = Path("uploads")
     uploads_dir.mkdir(parents=True, exist_ok=True)
 
@@ -36,7 +36,7 @@ async def upload_document(file: UploadFile = File(...)):
 
     from api.services.progress_manager import DocumentProgressManager
     progress = DocumentProgressManager()
-    progress.create(document_id, ANON_OWNER_ID, str(destination_path))
+    progress.create(document_id, current_user.id, str(destination_path))
 
     redis_client.xadd(
         "document_processing",
@@ -44,7 +44,7 @@ async def upload_document(file: UploadFile = File(...)):
             "data": json.dumps(
                 {
                     "document_id": document_id,
-                    "owner_id": ANON_OWNER_ID,
+                    "owner_id": current_user.id,
                     "filename": safe_filename,
                     "path": str(destination_path),
                 }
