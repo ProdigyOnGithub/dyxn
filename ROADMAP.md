@@ -11,5 +11,7 @@
 
 ## beyond mvp
 - [ ] add graph based reasoning using neo4j
-- [ ] implement Ray Serve which essentially works like Kubernetes but for models, helps with auto scaling
+- [ ] ~~implement Ray Serve which essentially works like Kubernetes but for models, helps with auto scaling~~
+Reason: Ray comes with dashboards and other extra stuff that takes up like 2gb extra of RAM which is not feasible for our scale.
 - [ ] since ingestion is done on the fly, make it respond with "not enough info" if files havent been processed yet
+- [] Add an alternate TOC based chunking and retrieval system 
