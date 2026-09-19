@@ -43,6 +43,35 @@ class EmbeddingWorker(BaseWorker):
         self.progress.complete_chunk(payload["document_id"])
         print(f"Upserted chunk {payload['chunk_id']} to Qdrant.")
 
+    def process_batch(self, payloads: list[Dict[str, Any]]):
+        if not payloads:
+            return
+            
+        print(f"Embedding batch of {len(payloads)} chunks...")
+        
+        texts = [p["text"] for p in payloads]
+        vectors = self.embedding_provider.embed_batch(texts) 
+        
+        textbook_points = []
+        slides_points = []
+        
+        for i, payload in enumerate(payloads):
+            point = {"id": str(uuid.uuid4()), "vector": vectors[i], "payload": payload}
+            if payload.get("source_type") == "textbook":
+                textbook_points.append(point)
+            else:
+                slides_points.append(point)
+                
+        if textbook_points:
+            self.vector_store.upsert(self.config.TEXTBOOK_COLLECTION_NAME, textbook_points)
+        if slides_points:
+            self.vector_store.upsert(self.config.SLIDES_COLLECTION_NAME, slides_points)
+            
+        for payload in payloads:
+            self.progress.complete_chunk(payload["document_id"])
+            
+        print(f"Upserted {len(payloads)} chunks to Qdrant.")
+
 
 if __name__ == "__main__":
     from core.providers.sentence_transformer_provider import SentenceTransformerProvider
@@ -59,4 +88,4 @@ if __name__ == "__main__":
         embedding_provider=embedding_provider,
         vector_store=vector_store
     )
-    worker.run(worker.process_message)
+    worker.run_batch(worker.process_batch, batch_size=32)
