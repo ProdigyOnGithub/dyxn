@@ -35,5 +35,5 @@ NOTES:
 {notes}
 """
         latex_body = self.llm.invoke(prompt).content
-        state["latex_output"] = LATEX_TEMPLATE.format(content=latex_body)
+        state["latex_output"] = LATEX_TEMPLATE.replace("{content}", latex_body)
         return state

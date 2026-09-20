@@ -30,7 +30,7 @@ class WorkflowOrchestrator:
         score = state.get("evaluation_score", 0.0)
         n = state.get("iteration_count", 0) + 1
         state["iteration_count"] = n
-        if score >= 8.0 or n >= 3:
+        if score >= 8.0 or n >= 1:
             return END
         return "synthesizer"
 

@@ -32,7 +32,7 @@ class RetrieverAgent(BaseAgent):
             if not collection:
                 continue
             try:
-                results.extend(self.vector_store.search(collection, query_vector, limit=10))
+                results.extend(self.vector_store.search(collection, query_vector, limit=3))
             except Exception as e:
                 self.logger.error(f"Retrieval failed for {collection}: {e}")
 
